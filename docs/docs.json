@@ -29,7 +29,8 @@
             "group": "Integration",
             "pages": [
               "integration/overview",
-              "integration/examples"
+              "integration/examples",
+              "integration/github-discord-webhook"
             ]
           },
           {

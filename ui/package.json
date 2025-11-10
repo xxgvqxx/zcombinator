@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
+    "@discordjs/rest": "^2.6.0",
     "@jup-ag/api": "^6.0.44",
     "@meteora-ag/cp-amm-sdk": "^1.1.5",
     "@meteora-ag/dynamic-bonding-curve-sdk": "^1.4.1",
@@ -31,6 +32,7 @@
     "bn.js": "^5.2.2",
     "bs58": "^6.0.0",
     "cors": "^2.8.5",
+    "discord-api-types": "^0.38.33",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-rate-limit": "^8.1.0",
