@@ -49,8 +49,8 @@ export function validateEnvironment(): EnvironmentValidation {
     missing.push('DISCORD_BOT_TOKEN');
   }
 
-  if (!process.env.DISCORD_FORUM_CHANNEL_ID) {
-    missing.push('DISCORD_FORUM_CHANNEL_ID');
+  if (!process.env.DISCORD_CHANNEL_ID) {
+    missing.push('DISCORD_CHANNEL_ID');
   }
 
   return {
@@ -126,19 +126,6 @@ function getDiscordClient(): REST {
   return new REST({ version: '10' }).setToken(token);
 }
 
-/**
- * Truncates thread name to Discord's 100 character limit
- *
- * @param name - Thread name to truncate
- * @returns Truncated name (max 100 chars)
- */
-function truncateThreadName(name: string): string {
-  const MAX_LENGTH = 100;
-  if (name.length <= MAX_LENGTH) {
-    return name;
-  }
-  return name.substring(0, MAX_LENGTH - 3) + '...';
-}
 
 /**
  * Formats GitHub issue data into Discord message
@@ -182,27 +169,23 @@ ${description}
 }
 
 /**
- * Creates Discord forum thread for GitHub issue with retry logic
+ * Sends Discord channel message for GitHub issue with retry logic
  * Implements exponential backoff for transient Discord API failures
  *
  * @param payload - GitHub webhook payload
- * @returns Created thread metadata
+ * @returns Sent message metadata
  * @throws Error if all retry attempts fail
  */
-export async function createForumThread(
+export async function sendChannelMessage(
   payload: GitHubIssuePayload
 ): Promise<DiscordThreadResponse> {
-  const forumChannelId = process.env.DISCORD_FORUM_CHANNEL_ID;
+  const channelId = process.env.DISCORD_CHANNEL_ID;
 
-  if (!forumChannelId) {
-    throw new Error('DISCORD_FORUM_CHANNEL_ID environment variable is not set');
+  if (!channelId) {
+    throw new Error('DISCORD_CHANNEL_ID environment variable is not set');
   }
 
   const rest = getDiscordClient();
-
-  const threadName = truncateThreadName(
-    `[#${payload.issue.number}] ${payload.issue.title}`
-  );
 
   const messageContent = formatIssueMessage(payload);
 
@@ -215,36 +198,32 @@ export async function createForumThread(
   while (attempts < maxAttempts) {
     try {
       console.log(
-        `Attempt ${attempts + 1}/${maxAttempts}: Creating Discord forum thread for issue #${payload.issue.number}`
+        `Attempt ${attempts + 1}/${maxAttempts}: Sending Discord message for issue #${payload.issue.number}`
       );
 
-      const thread = (await rest.post(Routes.threads(forumChannelId), {
+      const message = (await rest.post(Routes.channelMessages(channelId), {
         body: {
-          name: threadName,
-          message: {
-            content: messageContent,
-          },
-          auto_archive_duration: 1440, // 24 hours
+          content: messageContent,
         },
-      })) as APIThreadChannel;
+      })) as any;
 
       console.log(
-        `Successfully created Discord forum thread: ${threadName} (ID: ${thread.id})`
+        `Successfully sent Discord message for issue #${payload.issue.number} (Message ID: ${message.id})`
       );
 
       return {
-        id: thread.id,
-        name: thread.name || threadName,
-        type: thread.type,
-        parent_id: thread.parent_id || forumChannelId,
-        guild_id: thread.guild_id,
+        id: message.id,
+        name: `Issue #${payload.issue.number}`,
+        type: 0,
+        parent_id: channelId,
+        guild_id: message.guild_id,
       };
     } catch (error) {
       attempts++;
       lastError = error instanceof Error ? error : new Error(String(error));
 
       console.error(
-        `Attempt ${attempts}/${maxAttempts} failed to create Discord forum thread:`,
+        `Attempt ${attempts}/${maxAttempts} failed to send Discord message:`,
         lastError.message
       );
 
@@ -267,7 +246,7 @@ export async function createForumThread(
     : 'Unknown error';
 
   throw new Error(
-    `Failed to create Discord forum thread after ${maxAttempts} attempts: ${errorMessage}`
+    `Failed to send Discord message after ${maxAttempts} attempts: ${errorMessage}`
   );
 }
 
@@ -335,25 +314,25 @@ export async function processGitHubWebhook(
     };
   }
 
-  // 5. Create Discord thread
+  // 5. Send Discord message
   try {
     console.log(
       `Processing new GitHub issue: ${data.repository.full_name}#${data.issue.number}`
     );
 
-    const thread = await createForumThread(data);
+    const message = await sendChannelMessage(data);
 
     console.log(
-      `Successfully processed GitHub issue #${data.issue.number} → Discord thread ${thread.id}`
+      `Successfully processed GitHub issue #${data.issue.number} → Discord message ${message.id}`
     );
 
     return {
       success: true,
       thread: {
-        id: thread.id,
-        name: thread.name,
+        id: message.id,
+        name: message.name,
       },
-      message: 'Discord forum thread created successfully',
+      message: 'Discord message sent successfully',
     };
   } catch (error) {
     console.error('GitHub webhook processing error:', error);
